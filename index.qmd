@@ -1,13 +1,215 @@
 ---
-title: ""
+title: "Visão Geral E-CAP"
 image: logo.jpeg
 search: false
-echo: false
+execute:
+  echo: false
 about:
   template: marquee
   links:
-      - href: sections/pbe.qmd
-        text: Protótipo
-      - href: sections/ucbe.qmd
-        text: Conceito Urbano
+    - href: sections/pbe.qmd
+      text: Protótipo
+    - href: sections/ucbe.qmd
+      text: Conceito Urbano
 ---
+
+```{ojs}
+// 1. Contagem Regressiva e Leitura de Dados
+dataCompeticao = new Date("2026-08-24T00:00:00")
+diasRestantes = Math.ceil((dataCompeticao - new Date()) / 86400000)
+
+dados_gerais = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
+
+demandas_expandidas = dados_gerais.flatMap(d => {
+  if (!d.Setor) return [];
+  return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim() }));
+})
+
+// 2. Lógica de Datas e Prazos (Corrigida)
+function parseData(prazoStr) {
+  if (!prazoStr || !prazoStr.trim()) return null;
+  let p = prazoStr.trim().split(/[-/]/);
+  let dia, mes, ano;
+  if (p.length === 2) { 
+    dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = new Date().getFullYear();
+  } else if (p.length === 3) {
+    if (p[0].length === 4) { ano = parseInt(p[0]); mes = parseInt(p[1]) - 1; dia = parseInt(p[2]); }
+    else { dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = parseInt(p[2]); }
+    if (ano < 100) ano += 2000;
+  } else { return null; }
+  let d = new Date(ano, mes, dia);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function calcularDiasRestantes(prazoStr) {
+  let dataPrazo = parseData(prazoStr);
+  if (!dataPrazo) return null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
+  return Math.ceil((dataPrazo - hoje) / 86400000);
+}
+
+function formatarDataBR(prazoStr) {
+  let d = parseData(prazoStr);
+  return d ? d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : "---";
+}
+```
+
+```{ojs}
+// 3. Estilos CSS 
+html`<style>
+  .countdown-box { background: #1a1a1a; border: 2px solid #6f42c1; border-radius: 12px; padding: 20px; text-align: center; margin: 30px auto; max-width: 400px; box-shadow: 0 4px 15px rgba(111, 66, 193, 0.2); }
+  .countdown-number { font-size: 3.5em; font-weight: 800; color: #6f42c1; line-height: 1; margin: 10px 0; }
+  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 40px; margin-bottom: 40px;}
+  @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
+  .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-content: start; }
+  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .score-value { font-size: 2.2em; font-weight: bold; margin-top: 5px; }
+  .task-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1px solid #2d2d2d; }
+  .task-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
+  summary::-webkit-details-marker { display: none; }
+  summary { list-style: none; outline: none; }
+  .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; flex-wrap: wrap; }
+  .observablehq form { color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; margin: 0; }
+  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; font-size: 14px !important; cursor: pointer; outline: none; }
+  [data-plot-tooltip], [class*="plot-tooltip"] { color: #000 !important; }
+  g[aria-label="tip"] text { fill: #000 !important; }
+</style>`
+```
+
+```{ojs}
+// 4. Componentes do Dashboard
+html`
+<div class="countdown-box">
+  <div style="color: #adb5bd; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px;">Competição em</div>
+  <div class="countdown-number">${diasRestantes > 0 ? diasRestantes : 0}</div>
+  <div style="color: #fff; font-size: 1.2em; font-weight: 500;">Dias</div>
+</div>
+
+<h2 style="text-align: center; margin-top: 50px;">Panorama Geral dos Projetos</h2>
+
+<div class="dashboard-grid">
+  <div class="chart-card">
+    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Volume de Demandas por Setor</h4>
+    ${Plot.plot({
+      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
+      marginBottom: 110,
+      x: { label: null, tickRotate: -45 },
+      y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" },
+      color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
+      marks: [
+        Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
+      ]
+    })}
+  </div>
+  
+  <div class="score-grid">
+    <div class="score-card" style="border-top: 4px solid #fff;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Total</div>
+      <div class="score-value" style="color:#fff">${dados_gerais.length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #198754;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Concluídas</div>
+      <div class="score-value" style="color:#198754">${dados_gerais.filter(d=>d.Status==='Concluído').length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #dc3545;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Pendentes</div>
+      <div class="score-value" style="color:#dc3545">${dados_gerais.filter(d=>d.Status==='Pendente').length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #ffc107;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Detalhes</div>
+      <div class="score-value" style="color:#ffc107">${dados_gerais.filter(d=>d.Status==='Faltando só o detalhe').length}</div>
+    </div>
+  </div>
+</div>
+`
+```
+
+---
+
+## 📋 Lista Geral de Demandas
+
+<div class="filtros-container">
+```{ojs}
+viewof filtro_global_projeto = Inputs.select(["Todos", "Protótipo", "Conceito Urbano"], {label: "Projeto:", value: "Todos"})
+viewof filtro_global_status = Inputs.select(["Todos", "Pendente", "Faltando só o detalhe", "Concluído"], {label: "Status:", value: "Todos"})
+```
+</div>
+
+```{ojs}
+// 5. Renderização da Lista Global
+tarefas_filtradas = dados_gerais
+  .filter(d => 
+    (filtro_global_projeto === "Todos" || d.Categoria === filtro_global_projeto) &&
+    (filtro_global_status === "Todos" || d.Status === filtro_global_status)
+  )
+  .sort((a, b) => {
+    let diasA = calcularDiasRestantes(a.Prazo);
+    let diasB = calcularDiasRestantes(b.Prazo);
+    let pesoStatus = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
+    if (diasA !== null && diasB !== null) return diasA - diasB;
+    if (diasA !== null) return -1;
+    if (diasB !== null) return 1;
+    return (pesoStatus[a.Status] || 4) - (pesoStatus[b.Status] || 4);
+  })
+
+html`<div>
+  ${tarefas_filtradas.map(d => {
+    const dias = calcularDiasRestantes(d.Prazo);
+    let prazoTexto = "Sem prazo", badgeCor = "#444"; 
+    
+    if (dias !== null) {
+      if (dias < 0) { prazoTexto = `Atrasada (${Math.abs(dias)}d)`; badgeCor = "#dc3545"; }
+      else if (dias === 0) { prazoTexto = "Entrega HOJE"; badgeCor = "#fd7e14"; }
+      else { prazoTexto = `${dias} dias restantes`; badgeCor = dias <= 5 ? "#ffc107" : "#198754"; }
+      if (d.Status === "Concluído") badgeCor = "#444";
+    }
+
+    let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
+    let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
+    
+    let badgeProjeto = d.Categoria === 'Protótipo' ? '🔵 PROTÓTIPO' : '🟣 CONCEITO URBANO';
+
+    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
+      ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
+
+    let anexoHtml = "";
+    if (d.Anexo) {
+       let isLink = d.Anexo.startsWith("http");
+       anexoHtml = `<p style="margin-top: 8px;"><strong>📎 Anexo:</strong> ${isLink ? `<a href="${d.Anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a>` : d.Anexo}</p>`;
+    }
+
+    return `
+      <details class="task-card" style="border-left: 5px solid ${corBorda};">
+        <summary style="cursor: pointer; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; letter-spacing: 0.5px;">${badgeProjeto}</span>
+              <span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">${d.Setor}</span>
+            </div>
+            <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Tarefa}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            <span style="background: ${corBorda}; color: ${txtBorda}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">
+              ${d.Status}
+            </span>
+            <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">
+              ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
+            </span>
+          </div>
+        </summary>
+        <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
+          <hr style="border-color: #333; margin-top: 0;">
+          <p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>
+          ${detalheHtml}
+          ${anexoHtml}
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;">
+            <span><strong style="color:#aaa;">Responsável:</strong> ${d.Responsável || "---"}</span>
+            <span><strong style="color:#aaa;">Prazo Final:</strong> ${formatarDataBR(d.Prazo)}</span>
+          </div>
+        </div>
+      </details>
+    `;
+  }).join('')}
+</div>`
+```

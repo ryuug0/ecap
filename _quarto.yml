@@ -1,10 +1,12 @@
 project:
   type: website
   output-dir: docs
+
 website:
-  title: "E-CAP"
-  image: /logo.jpeg
+  title: ""
   navbar:
+    logo: logo.jpeg
+    background: "black" # Código hexadecimal para um tom de roxo
     left:
       - href: sections/pbe.qmd
         text: Protótipo
@@ -19,4 +21,3 @@ format:
     toc: true
 
 editor: visual
-

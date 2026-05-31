@@ -6,24 +6,41 @@ execute:
 ---
 
 ```{ojs}
-// 1. Dados
+// 1. Dados e tratamento de múltiplos setores
 dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
 demandas_proto = dados.filter(d => d.Categoria === "Protótipo")
 
+// Separa tarefas com múltiplos setores para o gráfico contar corretamente
+demandas_expandidas = demandas_proto.flatMap(d => {
+  if (!d.Setor) return [];
+  return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim() }));
+})
+
 // 2. Estilo CSS Injetado
 html`<style>
-  .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
+  @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
   .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  
+  /* Contadores */
+  .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-content: start; }
+  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .score-value { font-size: 2.2em; font-weight: bold; margin-top: 5px; }
+
+  /* Tarefas */
   .task-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1px solid #2d2d2d; }
   .task-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
   summary::-webkit-details-marker { display: none; }
   summary { list-style: none; outline: none; }
   
-  /* Melhoria visual dos botões de filtro */
-  .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; }
+  /* Filtros */
+  .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; flex-wrap: wrap; }
   .observablehq form { color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; margin: 0; }
   .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; font-size: 14px !important; cursor: pointer; outline: none; }
-  .observablehq select:hover { border-color: #888 !important; }
+  
+  /* Correção do Tooltip (Balão preto) */
+  [data-plot-tooltip], [class*="plot-tooltip"] { color: #000 !important; }
+  g[aria-label="tip"] text { fill: #000 !important; }
 </style>`
 ```
 
@@ -34,26 +51,34 @@ html`<div class="dashboard-grid">
   <div class="chart-card">
     <h4 style="margin-top:0; color:#aaa; font-size:14px;">Demandas por Setor</h4>
     ${Plot.plot({
-      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" }, // Letra maior
-      marginLeft: 40, marginBottom: 80, height: 320, // Margem aumentada para não cortar os nomes
-      x: { label: null, tickRotate: -35 }, y: { label: null, grid: true },
+      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
+      marginBottom: 110, // Evita cortar labels
+      x: { label: null, tickRotate: -45 },
+      y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" }, // "d" força apenas números inteiros
       color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
       marks: [
-        Plot.barY(demandas_proto, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
+        Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
       ]
     })}
   </div>
-  <div class="chart-card">
-    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Progresso Geral</h4>
-    ${Plot.plot({
-      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
-      marginLeft: 120, marginBottom: 40, height: 320, // Trocado para barras horizontais para funcionar corretamente
-      x: { label: "Quantidade", grid: true }, y: { label: null },
-      color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"], legend: true },
-      marks: [
-        Plot.barX(demandas_proto, Plot.groupY({ x: "count" }, { y: "Status", fill: "Status", tip: true, rx: 4 }))
-      ]
-    })}
+  
+  <div class="score-grid">
+    <div class="score-card" style="border-top: 4px solid #fff;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Total</div>
+      <div class="score-value" style="color:#fff">${demandas_proto.length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #198754;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Concluídas</div>
+      <div class="score-value" style="color:#198754">${demandas_proto.filter(d=>d.Status==='Concluído').length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #dc3545;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Pendentes</div>
+      <div class="score-value" style="color:#dc3545">${demandas_proto.filter(d=>d.Status==='Pendente').length}</div>
+    </div>
+    <div class="score-card" style="border-top: 4px solid #ffc107;">
+      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Ajustes</div>
+      <div class="score-value" style="color:#ffc107">${demandas_proto.filter(d=>d.Status==='Faltando só o detalhe').length}</div>
+    </div>
   </div>
 </div>`
 ```
@@ -64,28 +89,52 @@ html`<div class="dashboard-grid">
 
 <div class="filtros-container">
 ```{ojs}
-viewof filtro_setor = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Setor).filter(Boolean))], {label: "Setor:"})
+// Puxa setores únicos separando por vírgula para o menu
+setores_unicos = ["Todos", ...new Set(demandas_expandidas.map(d => d.Setor).filter(Boolean))].sort()
+viewof filtro_setor = Inputs.select(setores_unicos, {label: "Setor:", value: "Todos"})
 ```
 ```{ojs}
-viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status).filter(Boolean))], {label: "Status:"})
+viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status).filter(Boolean))], {label: "Status:", value: "Todos"})
 ```
 </div>
 
 ```{ojs}
-function calcularDiasRestantes(prazoStr) {
+function parseData(prazoStr) {
   if (!prazoStr || !prazoStr.trim()) return null;
-  const partes = prazoStr.split(/[-/]/);
-  let dataPrazo = partes.length === 3 ? new Date(partes[0], partes[1] - 1, partes[2]) : new Date(prazoStr);
-  const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
-  return Math.ceil((dataPrazo - hoje) / (86400000));
+  let p = prazoStr.trim().split(/[-/]/);
+  let dia, mes, ano;
+  if (p.length === 2) { // Ex: "15/02"
+    dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = new Date().getFullYear();
+  } else if (p.length === 3) { // Ex: "15/02/2026" ou "2026-02-15"
+    if (p[0].length === 4) { ano = parseInt(p[0]); mes = parseInt(p[1]) - 1; dia = parseInt(p[2]); }
+    else { dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = parseInt(p[2]); }
+    if (ano < 100) ano += 2000;
+  } else { return null; }
+  let d = new Date(ano, mes, dia);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-// Filtro + Ordenação por urgência (com ou sem prazo)
+function calcularDiasRestantes(prazoStr) {
+  let dataPrazo = parseData(prazoStr);
+  if (!dataPrazo) return null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
+  return Math.ceil((dataPrazo - hoje) / 86400000);
+}
+
+// Nova função para forçar o visual dd/mm/yyyy
+function formatarDataBR(prazoStr) {
+  let d = parseData(prazoStr);
+  return d ? d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : "---";
+}
+
 tarefas_filtradas = demandas_proto
-  .filter(d => 
-    (filtro_setor === "Todos" || d.Setor === filtro_setor) &&
-    (filtro_status === "Todos" || d.Status === filtro_status)
-  )
+  .filter(d => {
+    // Permite que a tarefa apareça se o filtro estiver contido na string de setores
+    let setores_da_tarefa = d.Setor ? d.Setor.split(",").map(s => s.trim()) : [];
+    let passa_setor = filtro_setor === "Todos" || setores_da_tarefa.includes(filtro_setor);
+    let passa_status = filtro_status === "Todos" || d.Status === filtro_status;
+    return passa_setor && passa_status;
+  })
   .sort((a, b) => {
     let diasA = calcularDiasRestantes(a.Prazo);
     let diasB = calcularDiasRestantes(b.Prazo);
@@ -115,12 +164,10 @@ html`<div>
     let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
     let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
 
-    // Condicional para o Detalhe
     let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
       ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` 
       : "";
 
-    // Condicional para o Anexo (Link ou Texto)
     let anexoHtml = "";
     if (d.Anexo) {
        let isLink = d.Anexo.startsWith("http");
