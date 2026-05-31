@@ -3,77 +3,111 @@ title: "Protótipo Elétrico"
 format: html
 execute:
   echo: false
-  warning: false
-  message: false
 ---
 
-```{r}
-#| label: setup-dados
-library(dplyr)
-library(ggplot2)
-library(plotly)
-library(DT)
-library(lubridate)
+## 📊 Visão Geral por Setor
 
-# R lê os dados estaticamente no momento da renderização
-url_csv <- "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv"
-dados <- read.csv(url_csv)
+Passe o mouse sobre as barras para ver os detalhes.
 
-demandas_proto <- dados %>% 
-  filter(Categoria == "Protótipo") %>%
-  mutate(
-    # Ajuste 'dmy' para 'ymd' caso a planilha esteja no formato Ano-Mês-Dia
-    Prazo_Data = dmy(Prazo), 
-    Dias_Restantes = as.numeric(Prazo_Data - Sys.Date())
-  )
-```
+```{ojs}
+// Carrega os dados em tempo real
+dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
+demandas_proto = dados.filter(d => d.Categoria === "Protótipo")
 
-## 📊 Indicadores Gerais
-
-```{r}
-#| label: grafico-setores
-g <- ggplot(demandas_proto, aes(x = Setor, fill = Status)) +
-  geom_bar() +
-  theme_minimal(base_size = 14) +
-  scale_fill_viridis_d(option = "turbo") +
-  labs(y = "Quantidade de Demandas", x = "") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# Converte o gráfico estático do R em HTML interativo
-ggplotly(g)
+// Gráfico interativo com design ajustado para tema escuro
+Plot.plot({
+  style: { background: "transparent", color: "#e0e0e0", fontSize: "14px", fontFamily: "inherit" },
+  marginLeft: 50,
+  marginBottom: 60,
+  x: { label: null, tickRotate: -25 },
+  y: { label: "Demandas", grid: true },
+  color: { 
+    legend: true, 
+    // Paleta de cores baseada nos status
+    domain: ["Pendente", "Em andamento", "Concluído"],
+    range: ["#dc3545", "#0dcaf0", "#198754"] 
+  },
+  marks: [
+    Plot.barY(demandas_proto, Plot.groupX(
+      { y: "count" }, 
+      { 
+        x: "Setor", 
+        fill: "Status", 
+        tip: true, // Adiciona tooltip ao passar o mouse
+        rx: 4,     // Arredonda as pontas das barras
+        inset: 1   // Espaçamento sutil entre as barras
+      }
+    ))
+  ]
+})
 ```
 
 ---
 
-## 📋 Lista de Demandas
+## 📋 Demandas Cadastradas
 
-```{r}
-#| label: tabela-interativa
-# Tabela com busca, filtros por coluna e formatação condicional de cores
-demandas_proto %>%
-  select(Setor, Tarefa, Descrição, Responsável, Status, Prazo, Dias_Restantes) %>%
-  datatable(
-    filter = 'top',
-    options = list(
-      pageLength = 10,
-      autoWidth = TRUE,
-      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Portuguese-Brasil.json')
-    ),
-    rownames = FALSE
-  ) %>%
-  formatStyle(
-    'Dias_Restantes',
-    backgroundColor = styleInterval(c(0, 3), c('#dc3545', '#ffc107', '#198754')),
-    color = 'white',
-    fontWeight = 'bold'
-  ) %>%
-  formatStyle(
-    'Status',
-    backgroundColor = styleEqual(
-      c("Pendente", "Em andamento", "Concluído"),
-      c('#dc3545', '#0dcaf0', '#198754')
-    ),
-    color = 'white',
-    fontWeight = 'bold'
-  )
+```{ojs}
+// Filtros visuais modernos
+viewof filtro_setor = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Setor).filter(Boolean))], {label: "Setor:"})
+viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status).filter(Boolean))], {label: "Status:"})
+
+tarefas_filtradas = demandas_proto.filter(d => 
+  (filtro_setor === "Todos" || d.Setor === filtro_setor) &&
+  (filtro_status === "Todos" || d.Status === filtro_status)
+)
+
+// Lógica de cálculo de dias
+function calcularDiasRestantes(prazoStr) {
+  if (!prazoStr || prazoStr.trim() === "") return null;
+  const partes = prazoStr.split(/[-/]/);
+  let dataPrazo = partes.length === 3 ? new Date(partes[0], partes[1] - 1, partes[2]) : new Date(prazoStr);
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  dataPrazo.setHours(0,0,0,0);
+  return Math.ceil((dataPrazo - hoje) / (1000 * 60 * 60 * 24));
+}
+```
+
+```{ojs}
+// Renderização HTML personalizada para o tema Cyborg
+html`<div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+  ${tarefas_filtradas.map(d => {
+    const dias = d.Prazo ? calcularDiasRestantes(d.Prazo) : null;
+    let prazoTexto = "Sem prazo";
+    let badgeCor = "#444"; 
+    
+    if (dias !== null) {
+      if (dias < 0) { prazoTexto = `Atrasada (${Math.abs(dias)}d)`; badgeCor = "#dc3545"; }
+      else if (dias === 0) { prazoTexto = "Entrega HOJE"; badgeCor = "#fd7e14"; }
+      else { prazoTexto = `${dias} dias restantes`; badgeCor = dias <= 5 ? "#ffc107" : "#198754"; }
+      
+      // Se concluído, sobrepõe a cor do prazo
+      if (d.Status === "Concluído") badgeCor = "#444";
+    }
+
+    return `
+      <details style="background: #1e1e1e; border-left: 4px solid ${d.Status === 'Concluído' ? '#198754' : d.Status === 'Em andamento' ? '#0dcaf0' : '#dc3545'}; border-radius: 6px; padding: 12px 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        <summary style="cursor: pointer; font-weight: 500; font-size: 1.05em; display: flex; justify-content: space-between; align-items: center; list-style: none;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #adb5bd; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px;">${d.Setor}</span>
+            <span style="color: #fff;">${d.Tarefa}</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <span style="background: ${badgeCor}; color: ${badgeCor === '#ffc107' ? '#000' : '#fff'}; padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold;">
+              ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
+            </span>
+          </div>
+        </summary>
+        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #333; color: #ced4da; font-size: 0.95em; line-height: 1.6;">
+          <p style="margin-bottom: 8px;"><strong>Descrição:</strong> ${d.Descrição || "-"}</p>
+          <div style="display: flex; gap: 20px; color: #868e96; font-size: 0.9em;">
+            <span><strong>Responsável:</strong> ${d.Responsável || "Não atribuído"}</span>
+            <span><strong>Prazo Final:</strong> ${d.Prazo || "-"}</span>
+            <span><strong>Status:</strong> ${d.Status}</span>
+          </div>
+        </div>
+      </details>
+    `;
+  }).join('')}
+</div>`
 ```
