@@ -1,0 +1,13 @@
+---
+title: ""
+image: logo.jpeg
+search: false
+echo: false
+about:
+  template: marquee
+  links:
+      - href: sections/pbe.qmd
+        text: Protótipo
+      - href: sections/ucbe.qmd
+        text: Conceito Urbano
+---

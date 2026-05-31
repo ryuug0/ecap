@@ -1,0 +1,22 @@
+project:
+  type: website
+
+website:
+  title: "E-CAP"
+  image: /logo.jpeg
+  navbar:
+    left:
+      - href: sections/pbe.qmd
+        text: Protótipo
+      - href: sections/ucbe.qmd
+        text: Conceito Urbano
+
+format:
+  html:
+    theme:
+      - cyborg
+    css: styles.css
+    toc: true
+
+editor: visual
+

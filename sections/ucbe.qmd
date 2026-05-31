@@ -1,0 +1,19 @@
+---
+title: "Conceito Urbano Elétrico"
+format: html
+---
+
+```{ojs}
+
+dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
+
+
+demandas_proto = dados.filter(d => d.Categoria === "Conceito Urbano")
+
+
+html`${demandas_proto.map(d => `
+  <div style="margin-bottom: 10px;">
+    <strong>[${d.Setor}]</strong> ${d.Tarefa} - <em>${d.Status}</em>
+  </div>
+`)}`
+```
