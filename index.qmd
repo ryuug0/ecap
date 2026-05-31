@@ -176,9 +176,22 @@ html`<div>
       ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
 
     let anexoHtml = "";
-    if (d.Anexo) {
-       let isLink = d.Anexo.startsWith("http");
-       anexoHtml = `<p style="margin-top: 8px;"><strong>📎 Anexo:</strong> ${isLink ? `<a href="${d.Anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a>` : d.Anexo}</p>`;
+    if (d.Anexo && d.Anexo.trim() !== "") {
+      let anexo = d.Anexo.trim();
+      let isLink = anexo.startsWith("http");
+      let isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+
+      if (isImage) {
+        anexoHtml = `
+          <div style="margin-top: 12px;">
+            <strong style="color:#aaa;">📎 Anexo (Imagem):</strong><br>
+            <img src="${anexo}" style="max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 8px; border: 1px solid #333; object-fit: contain;">
+          </div>`;
+      } else if (isLink) {
+        anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo (Link):</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Acessar Arquivo ↗</a></p>`;
+      } else {
+        anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> ${anexo}</p>`;
+      }
     }
 
     return `
