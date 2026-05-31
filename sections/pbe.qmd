@@ -1,119 +1,79 @@
 ---
 title: "Protótipo Elétrico"
 format: html
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
+
+```{r}
+#| label: setup-dados
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(lubridate)
+
+# R lê os dados estaticamente no momento da renderização
+url_csv <- "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv"
+dados <- read.csv(url_csv)
+
+demandas_proto <- dados %>% 
+  filter(Categoria == "Protótipo") %>%
+  mutate(
+    # Ajuste 'dmy' para 'ymd' caso a planilha esteja no formato Ano-Mês-Dia
+    Prazo_Data = dmy(Prazo), 
+    Dias_Restantes = as.numeric(Prazo_Data - Sys.Date())
+  )
+```
 
 ## 📊 Indicadores Gerais
 
-Aqui você acompanha a distribuição das demandas do Protótipo por setor.
+```{r}
+#| label: grafico-setores
+g <- ggplot(demandas_proto, aes(x = Setor, fill = Status)) +
+  geom_bar() +
+  theme_minimal(base_size = 14) +
+  scale_fill_viridis_d(option = "turbo") +
+  labs(y = "Quantidade de Demandas", x = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-```{ojs}
-//| echo: false
-// 1. Renderiza o gráfico de barras (histograma) por setor
-Plot.plot({
-  style: {
-    background: "transparent",
-    color: "#fff"
-  },
-  marks: [
-    Plot.barY(demandas_proto, Plot.groupX({y: "count"}, {x: "Setor", fill: "Status", sort: {x: "y", reverse: true}}))
-  ],
-  x: { tickRotate: -30, label: "Setor" },
-  y: { label: "Quantidade de Tarefas", grid: true },
-  color: { legend: true, scheme: "spectral" },
-  height: 300
-})
+# Converte o gráfico estático do R em HTML interativo
+ggplotly(g)
 ```
 
 ---
 
 ## 📋 Lista de Demandas
 
-Use os filtros abaixo para refinar a busca de tarefas do setor.
-
-```{ojs}
-//| echo: false
-// 2. Carrega a planilha publicada como CSV
-dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
-
-// 3. Filtra estaticamente apenas as demandas do Protótipo
-demandas_proto = dados.filter(d => d.Categoria === "Protótipo")
-
-// 4. Cria os componentes visuais de filtro
-viewof filtro_setor = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Setor))], {label: "Filtrar por Setor:"})
-viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status))], {label: "Filtrar por Status:"})
-
-// 5. Aplica os filtros dinâmicos baseados na seleção do usuário
-tarefas_filtradas = demandas_proto.filter(d => 
-  (filtro_setor === "Todos" || d.Setor ===  filtro_setor) &&
-  (filtro_status === "Todos" || d.Status === filtro_status)
-)
-
-// Helper function para calcular a diferença de dias
-function calcularDiasRestantes(prazoStr) {
-  if (!prazoStr || prazoStr.trim() === "") return null;
-  
-  // Trata formatos comuns de data (AAAA-MM-DD ou DD/MM)
-  const partes = prazoStr.split(/[-/]/);
-  let dataPrazo;
-  
-  if (partes.length === 3) {
-    dataPrazo = new Date(partes[0], partes[1] - 1, partes[2]);
-  } else if (partes.length === 2) {
-    dataPrazo = new Date(new Date().getFullYear(), partes[1] - 1, partes[0]);
-  } else {
-    dataPrazo = new Date(prazoStr);
-  }
-  
-  const hoje = new Date();
-  hoje.setHours(0,0,0,0);
-  dataPrazo.setHours(0,0,0,0);
-  
-  const diffTempo = dataPrazo - hoje;
-  return Math.ceil(diffTempo / (1000 * 60 * 60 * 24));
-}
+```{r}
+#| label: tabela-interativa
+# Tabela com busca, filtros por coluna e formatação condicional de cores
+demandas_proto %>%
+  select(Setor, Tarefa, Descrição, Responsável, Status, Prazo, Dias_Restantes) %>%
+  datatable(
+    filter = 'top',
+    options = list(
+      pageLength = 10,
+      autoWidth = TRUE,
+      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Portuguese-Brasil.json')
+    ),
+    rownames = FALSE
+  ) %>%
+  formatStyle(
+    'Dias_Restantes',
+    backgroundColor = styleInterval(c(0, 3), c('#dc3545', '#ffc107', '#198754')),
+    color = 'white',
+    fontWeight = 'bold'
+  ) %>%
+  formatStyle(
+    'Status',
+    backgroundColor = styleEqual(
+      c("Pendente", "Em andamento", "Concluído"),
+      c('#dc3545', '#0dcaf0', '#198754')
+    ),
+    color = 'white',
+    fontWeight = 'bold'
+  )
 ```
-
-```{ojs}
-//| echo: false
-// 6. Renderiza os blocos expansíveis (accordion nativo HTML)
-html`${tarefas_filtradas.map(d => {
-  const dias = d.Prazo ? calcularDiasRestantes(d.Prazo) : null;
-  let prazoTexto = "Sem prazo definido";
-  let badgeCor = "#6c757d"; // Cinza padrão
-  
-  if (dias !== null) {
-    if (dias < 0) {
-      prazoTexto = `Atrasada há ${Math.abs(dias)} dias`;
-      badgeCor = "#dc3545"; // Vermelho
-    } else if (dias === 0) {
-      prazoTexto = "Entrega HOJE";
-      badgeCor = "#fd7e14"; // Laranja
-    } else {
-      prazoTexto = `${dias} dias restantes`;
-      badgeCor = dias <= 3 ? "#ffc107" : "#198754"; // Amarelo se perto, senão Verde
-    }
-  }
-
-  return `
-    <details style="background: #1a1a1a; border: 1px solid #333; padding: 12px; margin-bottom: 10px; border-radius: 6px;">
-      <summary style="cursor: pointer; font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <span style="color: #0dfd9e; margin-right: 8px;">[${d.Setor}]</span>
-          <span>${d.Tarefa}</span>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">${d.Status}</span>
-          <span style="background: ${badgeCor}; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">${prazoTexto}</span>
-        </div>
-      </summary>
-      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333; color: #ccc; line-height: 1.5;">
-        <p><strong>Descrição:</strong> ${d.Descrição || "Nenhuma descrição fornecida."}</p>
-        <p><strong>Responsável:</strong> ${d.Responsável || "Não atribuído."}</p>
-        <p><strong>Prazo Final:</strong> ${d.Prazo || "Não estipulado."}</p>
-      </div>
-    </details>
-  `;
-}).join('')}`
-```
----
