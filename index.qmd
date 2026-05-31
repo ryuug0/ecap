@@ -131,7 +131,7 @@ html`
 
 <div class="filtros-container">
 ```{ojs}
-viewof filtro_global_projeto = Inputs.select(["Todos", "Protótipo", "Conceito Urbano"], {label: "Projeto:", value: "Todos"})
+viewof filtro_global_projeto = Inputs.select(["Todos", "Protótipo", "Conceito Urbano", "Geral"], {label: "Projeto:", value: "Todos"})
 viewof filtro_global_status = Inputs.select(["Todos", "Pendente", "Faltando só o detalhe", "Concluído"], {label: "Status:", value: "Todos"})
 ```
 </div>
@@ -168,7 +168,9 @@ html`<div>
     let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
     let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
     
-    let badgeProjeto = d.Categoria === 'Protótipo' ? '🔵 PROTÓTIPO' : '🟣 CONCEITO URBANO';
+    let badgeProjeto = d.Categoria === 'Protótipo' ? '🔵 PROTÓTIPO' : 
+                   d.Categoria === 'Conceito Urbano' ? '🟣 CONCEITO URBANO' : 
+                   '🟡 GERAL';
 
     let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
       ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
