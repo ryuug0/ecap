@@ -44,7 +44,6 @@ html`<style>
 </style>`
 ```
 
-## 📊 Dashboard de Desempenho
 
 ```{ojs}
 html`<div class="dashboard-grid">
