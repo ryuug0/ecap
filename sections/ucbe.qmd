@@ -10,7 +10,7 @@ execute:
 dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
 demandas_proto = dados.filter(d => d.Categoria === "Conceito Urbano")
 
-// 2. Estilo CSS Injetado (Design Moderno)
+// 2. Estilo CSS Injetado
 html`<style>
   .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
   .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
@@ -18,6 +18,12 @@ html`<style>
   .task-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
   summary::-webkit-details-marker { display: none; }
   summary { list-style: none; outline: none; }
+  
+  /* Melhoria visual dos botões de filtro */
+  .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; }
+  .observablehq form { color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; margin: 0; }
+  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; font-size: 14px !important; cursor: pointer; outline: none; }
+  .observablehq select:hover { border-color: #888 !important; }
 </style>`
 ```
 
@@ -25,26 +31,27 @@ html`<style>
 
 ```{ojs}
 html`<div class="dashboard-grid">
-  <div class="chart-card" id="grafico-setor">
+  <div class="chart-card">
     <h4 style="margin-top:0; color:#aaa; font-size:14px;">Demandas por Setor</h4>
     ${Plot.plot({
-      style: { background: "transparent", color: "#e0e0e0", fontSize: "12px" },
-      marginLeft: 40, marginBottom: 40, height: 250,
-      x: { label: null, tickRotate: -20 }, y: { label: null, grid: true },
+      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" }, // Letra maior
+      marginLeft: 40, marginBottom: 80, height: 320, // Margem aumentada para não cortar os nomes
+      x: { label: null, tickRotate: -35 }, y: { label: null, grid: true },
       color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
       marks: [
         Plot.barY(demandas_proto, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
       ]
     })}
   </div>
-  <div class="chart-card" id="grafico-status">
+  <div class="chart-card">
     <h4 style="margin-top:0; color:#aaa; font-size:14px;">Progresso Geral</h4>
     ${Plot.plot({
-      style: { background: "transparent", color: "#e0e0e0" },
-      height: 250,
+      style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
+      marginLeft: 120, marginBottom: 40, height: 320, // Trocado para barras horizontais para funcionar corretamente
+      x: { label: "Quantidade", grid: true }, y: { label: null },
       color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"], legend: true },
       marks: [
-        Plot.rectY(demandas_proto, Plot.binX({y: "count"}, {x: "Status", fill: "Status", tip: true, rx: 4, inset: 1}))
+        Plot.barX(demandas_proto, Plot.groupY({ x: "count" }, { y: "Status", fill: "Status", tip: true, rx: 4 }))
       ]
     })}
   </div>
@@ -55,15 +62,16 @@ html`<div class="dashboard-grid">
 
 ## 📋 Quadro de Tarefas
 
+<div class="filtros-container">
 ```{ojs}
 viewof filtro_setor = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Setor).filter(Boolean))], {label: "Setor:"})
+```
+```{ojs}
 viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status).filter(Boolean))], {label: "Status:"})
+```
+</div>
 
-tarefas_filtradas = demandas_proto.filter(d => 
-  (filtro_setor === "Todos" || d.Setor === filtro_setor) &&
-  (filtro_status === "Todos" || d.Status === filtro_status)
-)
-
+```{ojs}
 function calcularDiasRestantes(prazoStr) {
   if (!prazoStr || !prazoStr.trim()) return null;
   const partes = prazoStr.split(/[-/]/);
@@ -71,10 +79,28 @@ function calcularDiasRestantes(prazoStr) {
   const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
   return Math.ceil((dataPrazo - hoje) / (86400000));
 }
+
+// Filtro + Ordenação por urgência (com ou sem prazo)
+tarefas_filtradas = demandas_proto
+  .filter(d => 
+    (filtro_setor === "Todos" || d.Setor === filtro_setor) &&
+    (filtro_status === "Todos" || d.Status === filtro_status)
+  )
+  .sort((a, b) => {
+    let diasA = calcularDiasRestantes(a.Prazo);
+    let diasB = calcularDiasRestantes(b.Prazo);
+    let pesoStatus = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
+    
+    if (diasA !== null && diasB !== null) return diasA - diasB;
+    if (diasA !== null) return -1;
+    if (diasB !== null) return 1;
+    
+    return (pesoStatus[a.Status] || 4) - (pesoStatus[b.Status] || 4);
+  })
 ```
 
 ```{ojs}
-html`<div style="margin-top: 15px;">
+html`<div>
   ${tarefas_filtradas.map(d => {
     const dias = calcularDiasRestantes(d.Prazo);
     let prazoTexto = "Sem prazo", badgeCor = "#444"; 
@@ -89,6 +115,18 @@ html`<div style="margin-top: 15px;">
     let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
     let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
 
+    // Condicional para o Detalhe
+    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
+      ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` 
+      : "";
+
+    // Condicional para o Anexo (Link ou Texto)
+    let anexoHtml = "";
+    if (d.Anexo) {
+       let isLink = d.Anexo.startsWith("http");
+       anexoHtml = `<p style="margin-top: 8px;"><strong>📎 Anexo:</strong> ${isLink ? `<a href="${d.Anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a>` : d.Anexo}</p>`;
+    }
+
     return `
       <details class="task-card" style="border-left: 5px solid ${corBorda};">
         <summary style="cursor: pointer; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
@@ -101,13 +139,15 @@ html`<div style="margin-top: 15px;">
               ${d.Status}
             </span>
             <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">
-              <i class="bi bi-clock"></i> ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
+              ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
             </span>
           </div>
         </summary>
         <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
           <hr style="border-color: #333; margin-top: 0;">
           <p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>
+          ${detalheHtml}
+          ${anexoHtml}
           <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;">
             <span><strong style="color:#aaa;">Responsável:</strong> ${d.Responsável || "---"}</span>
             <span><strong style="color:#aaa;">Prazo Final:</strong> ${d.Prazo || "---"}</span>
