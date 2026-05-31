@@ -1,0 +1,16 @@
+[
+  {
+    "objectID": "sections/ucbe.html",
+    "href": "sections/ucbe.html",
+    "title": "Conceito Urbano Elétrico",
+    "section": "",
+    "text": "dados = d3.csv(\"https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv\")\n\n\ndemandas_proto = dados.filter(d =&gt; d.Categoria === \"Conceito Urbano\")\n\n\nhtml`${demandas_proto.map(d =&gt; `\n  &lt;div style=\"margin-bottom: 10px;\"&gt;\n    &lt;strong&gt;[${d.Setor}]&lt;/strong&gt; ${d.Tarefa} - &lt;em&gt;${d.Status}&lt;/em&gt;\n  &lt;/div&gt;\n`)}`"
+  },
+  {
+    "objectID": "sections/pbe.html#lista-de-demandas",
+    "href": "sections/pbe.html#lista-de-demandas",
+    "title": "Protótipo Elétrico",
+    "section": "📋 Lista de Demandas",
+    "text": "📋 Lista de Demandas"
+  }
+]
