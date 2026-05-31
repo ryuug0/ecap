@@ -1,5 +1,5 @@
 ---
-title: "Visão Geral E-CAP"
+title: ""
 image: logo.jpeg
 search: false
 execute:
