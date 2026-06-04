@@ -303,7 +303,7 @@ html`<div>
       else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Local:</strong> ${anexo}</p>`;
     }
     
-    let quemPediuLabel = d.Status === 'Aguardando reembolso' ? 'Reembolsar a:' : d.Status === 'Doação' ? 'Quem DOOU:' : 'Quem pediu:';
+    let quemPediuLabel = d.Status === 'Aguardando reembolso' ? 'Reembolsar a:' : d.Status === 'Doação' ? 'Quem Doou:' : 'Quem pediu:';
 
     return `
       <details class="item-card" style="border-left: 5px solid ${corStatus};">
