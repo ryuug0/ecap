@@ -1,33 +1,46 @@
 ---
-title: ""
+title: "Visão Geral E-CAP"
 image: logo.jpeg
 search: false
 execute:
   echo: false
-about:
-  template: marquee
-  links:
-    - href: sections/pbe.qmd
-      text: Protótipo
-    - href: sections/ucbe.qmd
-      text: Conceito Urbano
-    - href: "https://docs.google.com/spreadsheets/d/1lH8kZE6oc1SF1vffs-_3FoeX-rcwngIUTP1zPGSIplI/edit?usp=sharing"
-      text: ✏️ Alterar Demandas
 ---
 
 ```{ojs}
-// 1. Contagem Regressiva e Leitura de Dados
+// 1. Carga Global de Dados
 dataCompeticao = new Date("2026-08-24T00:00:00")
 diasRestantes = Math.ceil((dataCompeticao - new Date()) / 86400000)
 
 dados_gerais = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
+dados_compras = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=210558369&single=true&output=csv")
 
+// Tratamento de Tarefas
 demandas_expandidas = dados_gerais.flatMap(d => {
   if (!d.Setor) return [];
   return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim() }));
 })
 
-// 2. Lógica de Datas e Prazos (Corrigida)
+// Tratamento de Compras
+compras_tratadas = dados_compras.map(d => {
+  let valorLimpo = 0;
+  if (d.Valor) {
+    valorLimpo = parseFloat(d.Valor.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+  } else if (d.Preço && d.Quantidade) {
+    let p = parseFloat(d.Preço.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+    let q = parseInt(d.Quantidade) || 1;
+    valorLimpo = p * q;
+  }
+  return { ...d, valor_num: valorLimpo };
+})
+
+compras_expandidas = compras_tratadas.flatMap(d => {
+  if (!d.Categoria) return [];
+  let categorias = d.Categoria.split(",").map(c => c.trim());
+  let numCategorias = categorias.length;
+  return categorias.map(c => ({ ...d, Categoria: c, valor_proporcional: d.valor_num / numCategorias }));
+})
+
+// Funções de Data
 function parseData(prazoStr) {
   if (!prazoStr || !prazoStr.trim()) return null;
   let p = prazoStr.trim().split(/[-/]/);
@@ -54,82 +67,71 @@ function formatarDataBR(prazoStr) {
   let d = parseData(prazoStr);
   return d ? d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : "---";
 }
+
+formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 ```
 
 ```{ojs}
-// 3. Estilos CSS 
+// Estilos Globais
 html`<style>
-  .countdown-box { background: #1a1a1a; border: 2px solid #6f42c1; border-radius: 12px; padding: 20px; text-align: center; margin: 30px auto; max-width: 400px; box-shadow: 0 4px 15px rgba(111, 66, 193, 0.2); }
+  .countdown-box { background: #1a1a1a; border: 2px solid #6f42c1; border-radius: 12px; padding: 20px; text-align: center; margin: 20px auto; max-width: 400px; box-shadow: 0 4px 15px rgba(111, 66, 193, 0.2); }
   .countdown-number { font-size: 3.5em; font-weight: 800; color: #6f42c1; line-height: 1; margin: 10px 0; }
-  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 40px; margin-bottom: 40px;}
+  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin: 20px 0; }
   @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
-  .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #2d2d2d; }
   .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-content: start; }
-  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; }
   .score-value { font-size: 2.2em; font-weight: bold; margin-top: 5px; }
-  .task-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1px solid #2d2d2d; }
-  .task-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
+  .task-card, .item-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; border: 1px solid #2d2d2d; transition: all 0.2s ease; }
+  .task-card:hover, .item-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
+  summary { list-style: none; outline: none; cursor: pointer; }
   summary::-webkit-details-marker { display: none; }
-  summary { list-style: none; outline: none; }
   .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; flex-wrap: wrap; }
-  .observablehq form { color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; margin: 0; }
-  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; font-size: 14px !important; cursor: pointer; outline: none; }
+  .observablehq form { color: #fff; font-family: inherit; margin: 0; }
+  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; }
+  .finance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+  @media (max-width: 768px) { .finance-grid { grid-template-columns: 1fr; } }
+  .finance-card { background: #1a1a1a; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; }
+  .finance-title { color: #aaa; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .finance-value { font-size: 2.5em; font-weight: 800; margin-top: 10px; }
   [data-plot-tooltip], [class*="plot-tooltip"] { color: #000 !important; }
   g[aria-label="tip"] text { fill: #000 !important; }
 </style>`
 ```
 
-```{ojs}
-// 4. Componentes do Dashboard
-html`
 <div class="countdown-box">
   <div style="color: #adb5bd; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px;">Competição em</div>
   <div class="countdown-number">${diasRestantes > 0 ? diasRestantes : 0}</div>
   <div style="color: #fff; font-size: 1.2em; font-weight: 500;">Dias</div>
 </div>
 
-<h2 style="text-align: center; margin-top: 50px;">Panorama Geral dos Projetos</h2>
+# 📊 Painel de Controle Central
 
+::: {.panel-tabset}
+
+## 📋 Quadro de Tarefas
+
+```{ojs}
+html`
 <div class="dashboard-grid">
   <div class="chart-card">
     <h4 style="margin-top:0; color:#aaa; font-size:14px;">Volume de Demandas por Setor</h4>
     ${Plot.plot({
       style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
-      marginBottom: 110,
-      x: { label: null, tickRotate: -45 },
+      marginBottom: 110, x: { label: null, tickRotate: -45 },
       y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" },
       color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
-      marks: [
-        Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
-      ]
+      marks: [Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))]
     })}
   </div>
-  
   <div class="score-grid">
-    <div class="score-card" style="border-top: 4px solid #fff;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Total</div>
-      <div class="score-value" style="color:#fff">${dados_gerais.length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #198754;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Concluídas</div>
-      <div class="score-value" style="color:#198754">${dados_gerais.filter(d=>d.Status==='Concluído').length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #dc3545;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Pendentes</div>
-      <div class="score-value" style="color:#dc3545">${dados_gerais.filter(d=>d.Status==='Pendente').length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #ffc107;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Detalhes</div>
-      <div class="score-value" style="color:#ffc107">${dados_gerais.filter(d=>d.Status==='Faltando só o detalhe').length}</div>
-    </div>
+    <div class="score-card" style="border-top: 4px solid #fff;"><div style="color:#aaa; font-size:11px;">TOTAL</div><div class="score-value">${dados_gerais.length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #198754;"><div style="color:#aaa; font-size:11px;">CONCLUÍDAS</div><div class="score-value" style="color:#198754;">${dados_gerais.filter(d=>d.Status==='Concluído').length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #dc3545;"><div style="color:#aaa; font-size:11px;">PENDENTES</div><div class="score-value" style="color:#dc3545;">${dados_gerais.filter(d=>d.Status==='Pendente').length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #ffc107;"><div style="color:#aaa; font-size:11px;">DETALHES</div><div class="score-value" style="color:#ffc107;">${dados_gerais.filter(d=>d.Status==='Faltando só o detalhe').length}</div></div>
   </div>
-</div>
-`
+</div>`
 ```
-
----
-
-## 📋 Lista Geral de Demandas
 
 <div class="filtros-container">
 ```{ojs}
@@ -139,94 +141,141 @@ viewof filtro_global_status = Inputs.select(["Todos", "Pendente", "Faltando só 
 </div>
 
 ```{ojs}
-// 5. Renderização da Lista Global
 tarefas_filtradas = dados_gerais
-  .filter(d => 
-    (filtro_global_projeto === "Todos" || d.Categoria === filtro_global_projeto) &&
-    (filtro_global_status === "Todos" || d.Status === filtro_global_status)
-  )
+  .filter(d => (filtro_global_projeto === "Todos" || d.Categoria === filtro_global_projeto) && (filtro_global_status === "Todos" || d.Status === filtro_global_status))
   .sort((a, b) => {
-    let diasA = calcularDiasRestantes(a.Prazo);
-    let diasB = calcularDiasRestantes(b.Prazo);
-    let pesoStatus = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
+    let diasA = calcularDiasRestantes(a.Prazo), diasB = calcularDiasRestantes(b.Prazo);
+    let peso = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
     if (diasA !== null && diasB !== null) return diasA - diasB;
-    if (diasA !== null) return -1;
-    if (diasB !== null) return 1;
-    return (pesoStatus[a.Status] || 4) - (pesoStatus[b.Status] || 4);
+    if (diasA !== null) return -1; if (diasB !== null) return 1;
+    return (peso[a.Status] || 4) - (peso[b.Status] || 4);
   })
 
 html`<div>
   ${tarefas_filtradas.map(d => {
     const dias = calcularDiasRestantes(d.Prazo);
     let prazoTexto = "Sem prazo", badgeCor = "#444"; 
-    
     if (dias !== null) {
       if (dias < 0) { prazoTexto = `Atrasada (${Math.abs(dias)}d)`; badgeCor = "#dc3545"; }
       else if (dias === 0) { prazoTexto = "Entrega HOJE"; badgeCor = "#fd7e14"; }
       else { prazoTexto = `${dias} dias restantes`; badgeCor = dias <= 5 ? "#ffc107" : "#198754"; }
       if (d.Status === "Concluído") badgeCor = "#444";
     }
-
     let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
     let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
-    
-    let badgeProjeto = d.Categoria === 'Protótipo' ? '🔵 PROTÓTIPO' : 
-                   d.Categoria === 'Conceito Urbano' ? '🟣 CONCEITO URBANO' : 
-                   '🟡 GERAL';
-
-    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
-      ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
-
+    let badgeProj = d.Categoria === 'Protótipo' ? '🔵 PROTÓTIPO' : d.Categoria === 'Conceito Urbano' ? '🟣 CONCEITO URBANO' : '🟡 GERAL';
+    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
     let anexoHtml = "";
     if (d.Anexo && d.Anexo.trim() !== "") {
-      let anexo = d.Anexo.trim();
-      let isLink = anexo.startsWith("http");
-      let isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
-
-      if (isImage) {
-        anexoHtml = `
-          <div style="margin-top: 12px;">
-            <strong style="color:#aaa;">📎 Anexo (Imagem):</strong><br>
-            <img src="${anexo}" style="max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 8px; border: 1px solid #333; object-fit: contain;">
-          </div>`;
-      } else if (isLink) {
-        anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo (Link):</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Acessar Arquivo ↗</a></p>`;
-      } else {
-        anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> ${anexo}</p>`;
-      }
+      let anexo = d.Anexo.trim(), isLink = anexo.startsWith("http"), isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+      if (isImage) anexoHtml = `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Anexo (Imagem):</strong><br><img src="${anexo}" style="max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 8px; border: 1px solid #333; object-fit: contain;"></div>`;
+      else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a></p>`;
+      else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> ${anexo}</p>`;
     }
-
     return `
       <details class="task-card" style="border-left: 5px solid ${corBorda};">
-        <summary style="cursor: pointer; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <summary style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; letter-spacing: 0.5px;">${badgeProjeto}</span>
-              <span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">${d.Setor}</span>
-            </div>
+            <div style="display: flex; gap: 10px; align-items: center;"><span style="background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7em;">${badgeProj}</span><span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700;">${d.Setor}</span></div>
             <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Tarefa}</span>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-            <span style="background: ${corBorda}; color: ${txtBorda}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">
-              ${d.Status}
-            </span>
-            <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">
-              ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
-            </span>
+            <span style="background: ${corBorda}; color: ${txtBorda}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">${d.Status}</span>
+            <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}</span>
           </div>
         </summary>
         <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
-          <hr style="border-color: #333; margin-top: 0;">
-          <p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>
-          ${detalheHtml}
-          ${anexoHtml}
-          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;">
-            <span><strong style="color:#aaa;">Responsável:</strong> ${d.Responsável || "---"}</span>
-            <span><strong style="color:#aaa;">Prazo Final:</strong> ${formatarDataBR(d.Prazo)}</span>
-          </div>
+          <hr style="border-color: #333; margin-top: 0;"><p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>${detalheHtml}${anexoHtml}
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Responsável:</strong> ${d.Responsável || "---"}</span><span><strong>Prazo Final:</strong> ${formatarDataBR(d.Prazo)}</span></div>
         </div>
-      </details>
-    `;
+      </details>`;
   }).join('')}
 </div>`
 ```
+
+## 💰 Gestão Financeira
+
+```{ojs}
+totalGasto = compras_tratadas.filter(d => d.Status === "Concluído").reduce((sum, d) => sum + d.valor_num, 0)
+totalPrevisto = compras_tratadas.filter(d => d.Status === "Aguardando verba").reduce((sum, d) => sum + d.valor_num, 0)
+
+html`
+<div class="finance-grid">
+  <div class="finance-card" style="border-top: 5px solid #0d6efd;">
+    <div class="finance-title">Gastos Totais (Comprado)</div>
+    <div class="finance-value" style="color: #0d6efd;">${formatarMoeda(totalGasto)}</div>
+  </div>
+  <div class="finance-card" style="border-top: 5px solid #fd7e14;">
+    <div class="finance-title">Gastos Previstos (Aguardando Verba)</div>
+    <div class="finance-value" style="color: #fd7e14;">${formatarMoeda(totalPrevisto)}</div>
+  </div>
+</div>
+<div class="chart-card" style="margin-bottom:20px;">
+  <h4 style="margin-top:0; color:#aaa; font-size:14px; margin-bottom:15px;">Divisão Proporcional de Custos por Categoria</h4>
+  ${Plot.plot({
+    style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
+    marginLeft: 60, marginBottom: 40, height: 250, x: { label: null }, y: { label: null, grid: true },
+    color: { domain: ["Aguardando verba", "Aguardando reembolso", "Doação", "Concluído"], range: ["#fd7e14", "#ffc107", "#39ff14", "#0d6efd"], legend: true },
+    marks: [Plot.barY(compras_expandidas, Plot.groupX({ y: "sum" }, { x: "Categoria", y: "valor_proporcional", fill: "Status", tip: true, rx: 4 }))]
+  })}
+</div>`
+```
+
+<div class="filtros-container">
+```{ojs}
+viewof filtro_compra_proj = Inputs.select(["Todos", "Protótipo", "Conceito Urbano", "Geral"], {label: "Filtrar Projeto:", value: "Todos"})
+viewof filtro_compra_stat = Inputs.select(["Todos", "Aguardando verba", "Aguardando reembolso", "Doação", "Concluído"], {label: "Filtrar Status:", value: "Todos"})
+```
+</div>
+
+```{ojs}
+itens_filtrados = compras_tratadas
+  .filter(d => (filtro_compra_proj === "Todos" || (d.Categoria && d.Categoria.split(",").map(c=>c.trim()).includes(filtro_compra_proj))) && (filtro_compra_stat === "Todos" || d.Status === filtro_compra_stat))
+  .sort((a, b) => {
+    let peso = { "URGENTE!": 1, "Tem que comprar logo": 2, "Da pra esperar": 3, "Apenas um detalhe": 4 };
+    return (peso[a.Prioridade] || 5) - (peso[b.Prioridade] || 5);
+  })
+
+html`<div>
+  ${itens_filtrados.map(d => {
+    let corStatus = d.Status === 'Concluído' ? '#0d6efd' : d.Status === 'Doação' ? '#39ff14' : d.Status === 'Aguardando reembolso' ? '#ffc107' : '#fd7e14';
+    let txtStatus = (d.Status === 'Aguardando reembolso' || d.Status === 'Doação') ? '#000' : '#fff';
+    
+    let corPrioridade = d.Prioridade === 'URGENTE!' ? '#dc3545' : d.Prioridade === 'Tem que comprar logo' ? '#fd7e14' : d.Prioridade === 'Da pra esperar' ? '#ffc107' : '#198754';
+    let txtPrioridade = d.Prioridade === 'Da pra esperar' ? '#000' : '#fff';
+
+    let categoriasArray = d.Categoria ? d.Categoria.split(",").map(c=>c.trim()) : [];
+    let badgeProjeto = categoriasArray.map(c => {
+      let cor = c === 'Protótipo' ? '#0b5ed7' : c === 'Conceito Urbano' ? '#6f42c1' : '#495057';
+      return `<span style="background: ${cor}; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: 600; margin-right: 4px;">${c.toUpperCase()}</span>`;
+    }).join('');
+    
+    let anexoHtml = "";
+    if (d.Anexo && d.Anexo.trim() !== "") {
+      let anexo = d.Anexo.trim(), isLink = anexo.startsWith("http"), isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+      if (isImage) anexoHtml = `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Imagem:</strong><br><img src="${anexo}" style="max-width: 100%; max-height: 180px; border-radius: 6px; margin-top: 8px; border: 1px solid #333;"></div>`;
+      else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">🔗 Link:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Ver Loja ↗</a></p>`;
+      else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Local:</strong> ${anexo}</p>`;
+    }
+    return `
+      <details class="item-card" style="border-left: 5px solid ${corStatus};">
+        <summary style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;"><span style="background: ${corPrioridade}; color: ${txtPrioridade}; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 2px;">🔥 ${d.Prioridade ? d.Prioridade.toUpperCase() : '---'}</span>${badgeProjeto}<span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700; margin-left:4px;">${d.Setor || ""}</span></div>
+            <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Item}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            <span style="background: ${corStatus}; color: ${txtStatus}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">${d.Status}</span>
+            <span style="color: #fff; font-size: 1.1em; font-weight: 700;">${formatarMoeda(d.valor_num)}</span>
+          </div>
+        </summary>
+        <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
+          <hr style="border-color: #333; margin-top: 0;"><p><strong>Especificação / Pra que:</strong> ${d['Pra que'] || "---"}</p>${anexoHtml}
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Quem pediu:</strong> ${d['Quem Pediu'] || "---"}</span><span><strong>Qtd:</strong> ${d.Quantidade || "1"}</span></div>
+        </div>
+      </details>`;
+  }).join('')}
+</div>`
+```
+
+:::

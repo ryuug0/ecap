@@ -1,206 +1,235 @@
 ---
-title: "Protótipo Elétrico"
-format: html
+title: "Desenvolvimento do Conceito Urbano"
+search: false
 execute:
   echo: false
 ---
 
 ```{ojs}
-// 1. Dados e tratamento de múltiplos setores
-dados = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
-demandas_proto = dados.filter(d => d.Categoria === "Conceito Urbano")
+// 1. Leituras Filtradas para Conceito Urbano
+dados_brutos_tarefas = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=0&single=true&output=csv")
+dados_brutos_compras = d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vR_kABBziuLQDcgkwtThORXGuhxlp9G1mWXsb9Xv6XzB9T4K47YFWr6oRXahriBjqsIeQgl1pe_stIe/pub?gid=210558369&single=true&output=csv")
 
-// Separa tarefas com múltiplos setores para o gráfico contar corretamente
+demandas_proto = dados_brutos_tarefas.filter(d => d.Categoria === "Conceito Urbano")
+compras_proto_base = dados_brutos_compras.filter(d => d.Categoria && d.Categoria.split(",").map(c=>c.trim()).includes("Conceito Urbano"))
+
+// Processamentos Locais
 demandas_expandidas = demandas_proto.flatMap(d => {
   if (!d.Setor) return [];
   return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim() }));
 })
 
-// 2. Estilo CSS Injetado
-html`<style>
-  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
-  @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
-  .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-  
-  /* Contadores */
-  .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-content: start; }
-  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-  .score-value { font-size: 2.2em; font-weight: bold; margin-top: 5px; }
+compras_tratadas = compras_proto_base.map(d => {
+  let valorLimpo = 0;
+  if (d.Valor) { valorLimpo = parseFloat(d.Valor.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0; }
+  else if (d.Preço && d.Quantidade) {
+    let p = parseFloat(d.Preço.replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+    let q = parseInt(d.Quantidade) || 1; valorLimpo = p * q;
+  }
+  let numCat = d.Categoria.split(",").map(c=>c.trim()).length;
+  return { ...d, valor_num: valorLimpo, valor_proporcional: valorLimpo / numCat };
+})
 
-  /* Tarefas */
-  .task-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border: 1px solid #2d2d2d; }
-  .task-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
+// Funções de Suporte (Datas e Moeda)
+function parseData(prazoStr) {
+  if (!prazoStr || !prazoStr.trim()) return null;
+  let p = prazoStr.trim().split(/[-/]/);
+  let dia, mes, ano;
+  if (p.length === 2) { dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = new Date().getFullYear(); } 
+  else if (p.length === 3) {
+    if (p[0].length === 4) { ano = parseInt(p[0]); mes = parseInt(p[1]) - 1; dia = parseInt(p[2]); }
+    else { dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = parseInt(p[2]); }
+    if (ano < 100) ano += 2000;
+  } else { return null; }
+  let d = new Date(ano, mes, dia); return isNaN(d.getTime()) ? null : d;
+}
+function calcularDiasRestantes(prazoStr) {
+  let dataPrazo = parseData(prazoStr); if (!dataPrazo) return null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
+  return Math.ceil((dataPrazo - hoje) / 86400000);
+}
+function formatarDataBR(prazoStr) {
+  let d = parseData(prazoStr); return d ? d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : "---";
+}
+formatarMoeda = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+```
+
+```{ojs}
+// Injeção de Estilos CSS Locais
+html`<style>
+  .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin: 20px 0; }
+  @media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } }
+  .chart-card { background: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #2d2d2d; }
+  .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-content: start; }
+  .score-card { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; }
+  .score-value { font-size: 2.2em; font-weight: bold; margin-top: 5px; }
+  .task-card, .item-card { background: #1e1e1e; border-radius: 8px; margin-bottom: 12px; border: 1px solid #2d2d2d; transition: all 0.2s ease; }
+  .task-card:hover, .item-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: #444; }
+  summary { list-style: none; outline: none; cursor: pointer; }
   summary::-webkit-details-marker { display: none; }
-  summary { list-style: none; outline: none; }
-  
-  /* Filtros */
   .filtros-container { display: flex; gap: 20px; background: #1a1a1a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d2d2d; align-items: center; flex-wrap: wrap; }
-  .observablehq form { color: #fff; font-family: inherit; font-size: 14px; font-weight: 500; margin: 0; }
-  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; font-size: 14px !important; cursor: pointer; outline: none; }
-  
-  /* Correção do Tooltip (Balão preto) */
+  .observablehq form { color: #fff; font-family: inherit; margin: 0; }
+  .observablehq select { background: #2d2d2d !important; color: #fff !important; border: 1px solid #555 !important; padding: 8px 12px !important; border-radius: 6px !important; }
+  .finance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+  @media (max-width: 768px) { .finance-grid { grid-template-columns: 1fr; } }
+  .finance-card { background: #1a1a1a; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #2d2d2d; }
+  .finance-title { color: #aaa; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .finance-value { font-size: 2.5em; font-weight: 800; margin-top: 10px; }
   [data-plot-tooltip], [class*="plot-tooltip"] { color: #000 !important; }
   g[aria-label="tip"] text { fill: #000 !important; }
 </style>`
 ```
 
+::: {.panel-tabset}
+
+## 📋 Tarefas do Carro
 
 ```{ojs}
-html`<div class="dashboard-grid">
+html`
+<div class="dashboard-grid">
   <div class="chart-card">
-    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Demandas por Setor</h4>
+    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Demandas do Conceito Urbano por Setor</h4>
     ${Plot.plot({
       style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
-      marginBottom: 110, // Evita cortar labels
-      x: { label: null, tickRotate: -45 },
-      y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" }, // "d" força apenas números inteiros
+      marginBottom: 110, x: { label: null, tickRotate: -45 },
+      y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" },
       color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
-      marks: [
-        Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))
-      ]
+      marks: [Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))]
     })}
   </div>
-  
   <div class="score-grid">
-    <div class="score-card" style="border-top: 4px solid #fff;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Total</div>
-      <div class="score-value" style="color:#fff">${demandas_proto.length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #198754;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Concluídas</div>
-      <div class="score-value" style="color:#198754">${demandas_proto.filter(d=>d.Status==='Concluído').length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #dc3545;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Pendentes</div>
-      <div class="score-value" style="color:#dc3545">${demandas_proto.filter(d=>d.Status==='Pendente').length}</div>
-    </div>
-    <div class="score-card" style="border-top: 4px solid #ffc107;">
-      <div style="color:#aaa; font-size: 12px; text-transform: uppercase;">Ajustes</div>
-      <div class="score-value" style="color:#ffc107">${demandas_proto.filter(d=>d.Status==='Faltando só o detalhe').length}</div>
-    </div>
+    <div class="score-card" style="border-top: 4px solid #fff;"><div style="color:#aaa; font-size:11px;">TOTAL</div><div class="score-value">${demandas_proto.length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #198754;"><div style="color:#aaa; font-size:11px;">CONCLUÍDAS</div><div class="score-value" style="color:#198754;">${demandas_proto.filter(d=>d.Status==='Concluído').length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #dc3545;"><div style="color:#aaa; font-size:11px;">PENDENTES</div><div class="score-value" style="color:#dc3545;">${demandas_proto.filter(d=>d.Status==='Pendente').length}</div></div>
+    <div class="score-card" style="border-top: 4px solid #ffc107;"><div style="color:#aaa; font-size:11px;">AJUSTES</div><div class="score-value" style="color:#ffc107;">${demandas_proto.filter(d=>d.Status==='Faltando só o detalhe').length}</div></div>
   </div>
 </div>`
 ```
 
----
-
-## 📋 Quadro de Tarefas
-
 <div class="filtros-container">
 ```{ojs}
-// Puxa setores únicos separando por vírgula para o menu
 setores_unicos = ["Todos", ...new Set(demandas_expandidas.map(d => d.Setor).filter(Boolean))].sort()
 viewof filtro_setor = Inputs.select(setores_unicos, {label: "Setor:", value: "Todos"})
-```
-```{ojs}
-viewof filtro_status = Inputs.select(["Todos", ...new Set(demandas_proto.map(d => d.Status).filter(Boolean))], {label: "Status:", value: "Todos"})
+viewof filtro_status = Inputs.select(["Todos", "Pendente", "Faltando só o detalhe", "Concluído"], {label: "Status:", value: "Todos"})
 ```
 </div>
 
 ```{ojs}
-function parseData(prazoStr) {
-  if (!prazoStr || !prazoStr.trim()) return null;
-  let p = prazoStr.trim().split(/[-/]/);
-  let dia, mes, ano;
-  if (p.length === 2) { // Ex: "15/02"
-    dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = new Date().getFullYear();
-  } else if (p.length === 3) { // Ex: "15/02/2026" ou "2026-02-15"
-    if (p[0].length === 4) { ano = parseInt(p[0]); mes = parseInt(p[1]) - 1; dia = parseInt(p[2]); }
-    else { dia = parseInt(p[0]); mes = parseInt(p[1]) - 1; ano = parseInt(p[2]); }
-    if (ano < 100) ano += 2000;
-  } else { return null; }
-  let d = new Date(ano, mes, dia);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function calcularDiasRestantes(prazoStr) {
-  let dataPrazo = parseData(prazoStr);
-  if (!dataPrazo) return null;
-  const hoje = new Date(); hoje.setHours(0,0,0,0); dataPrazo.setHours(0,0,0,0);
-  return Math.ceil((dataPrazo - hoje) / 86400000);
-}
-
-// Nova função para forçar o visual dd/mm/yyyy
-function formatarDataBR(prazoStr) {
-  let d = parseData(prazoStr);
-  return d ? d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : "---";
-}
-
 tarefas_filtradas = demandas_proto
   .filter(d => {
-    // Permite que a tarefa apareça se o filtro estiver contido na string de setores
-    let setores_da_tarefa = d.Setor ? d.Setor.split(",").map(s => s.trim()) : [];
-    let passa_setor = filtro_setor === "Todos" || setores_da_tarefa.includes(filtro_setor);
-    let passa_status = filtro_status === "Todos" || d.Status === filtro_status;
-    return passa_setor && passa_status;
+    let setores = d.Setor ? d.Setor.split(",").map(s => s.trim()) : [];
+    return (filtro_setor === "Todos" || setores.includes(filtro_setor)) && (filtro_status === "Todos" || d.Status === filtro_status);
   })
   .sort((a, b) => {
-    let diasA = calcularDiasRestantes(a.Prazo);
-    let diasB = calcularDiasRestantes(b.Prazo);
-    let pesoStatus = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
-    
+    let diasA = calcularDiasRestantes(a.Prazo), diasB = calcularDiasRestantes(b.Prazo);
+    let peso = { "Pendente": 1, "Faltando só o detalhe": 2, "Concluído": 3 };
     if (diasA !== null && diasB !== null) return diasA - diasB;
-    if (diasA !== null) return -1;
-    if (diasB !== null) return 1;
-    
-    return (pesoStatus[a.Status] || 4) - (pesoStatus[b.Status] || 4);
+    if (diasA !== null) return -1; if (diasB !== null) return 1;
+    return (peso[a.Status] || 4) - (peso[b.Status] || 4);
   })
-```
 
-```{ojs}
 html`<div>
   ${tarefas_filtradas.map(d => {
     const dias = calcularDiasRestantes(d.Prazo);
     let prazoTexto = "Sem prazo", badgeCor = "#444"; 
-    
     if (dias !== null) {
       if (dias < 0) { prazoTexto = `Atrasada (${Math.abs(dias)}d)`; badgeCor = "#dc3545"; }
       else if (dias === 0) { prazoTexto = "Entrega HOJE"; badgeCor = "#fd7e14"; }
       else { prazoTexto = `${dias} dias restantes`; badgeCor = dias <= 5 ? "#ffc107" : "#198754"; }
       if (d.Status === "Concluído") badgeCor = "#444";
     }
-
     let corBorda = d.Status === 'Concluído' ? '#198754' : d.Status === 'Faltando só o detalhe' ? '#ffc107' : '#dc3545';
     let txtBorda = d.Status === 'Faltando só o detalhe' ? '#000' : '#fff';
-
-    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) 
-      ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` 
-      : "";
-
+    let detalheHtml = (d.Status === 'Faltando só o detalhe' && d.Detalhe) ? `<p style="color: #ffc107; margin-top: 8px;"><strong>⚠️ Detalhe Pendente:</strong> ${d.Detalhe}</p>` : "";
     let anexoHtml = "";
-    if (d.Anexo) {
-       let isLink = d.Anexo.startsWith("http");
-       anexoHtml = `<p style="margin-top: 8px;"><strong>📎 Anexo:</strong> ${isLink ? `<a href="${d.Anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a>` : d.Anexo}</p>`;
+    if (d.Anexo && d.Anexo.trim() !== "") {
+      let anexo = d.Anexo.trim(), isLink = anexo.startsWith("http"), isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+      if (isImage) anexoHtml = `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Anexo (Imagem):</strong><br><img src="${anexo}" style="max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 8px; border: 1px solid #333; object-fit: contain;"></div>`;
+      else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none;">Acessar Arquivo ↗</a></p>`;
+      else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Anexo:</strong> ${anexo}</p>`;
     }
-
     return `
       <details class="task-card" style="border-left: 5px solid ${corBorda};">
-        <summary style="cursor: pointer; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <summary style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column; gap: 4px;">
-            <span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">${d.Setor}</span>
+            <span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700;">${d.Setor}</span>
             <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Tarefa}</span>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-            <span style="background: ${corBorda}; color: ${txtBorda}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">
-              ${d.Status}
-            </span>
-            <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">
-              ${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}
-            </span>
+            <span style="background: ${corBorda}; color: ${txtBorda}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">${d.Status}</span>
+            <span style="color: ${badgeCor}; font-size: 0.8em; font-weight: 600;">${d.Status === 'Concluído' ? 'Finalizado' : prazoTexto}</span>
           </div>
         </summary>
         <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
-          <hr style="border-color: #333; margin-top: 0;">
-          <p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>
-          ${detalheHtml}
-          ${anexoHtml}
-          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;">
-            <span><strong style="color:#aaa;">Responsável:</strong> ${d.Responsável || "---"}</span>
-            <span><strong style="color:#aaa;">Prazo Final:</strong> ${d.Prazo || "---"}</span>
-          </div>
+          <hr style="border-color: #333; margin-top: 0;"><p><strong>Descrição:</strong> ${d.Descrição || "---"}</p>${detalheHtml}${anexoHtml}
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Responsável:</strong> ${d.Responsável || "---"}</span><span><strong>Prazo Final:</strong> ${formatarDataBR(d.Prazo)}</span></div>
         </div>
-      </details>
-    `;
+      </details>`;
   }).join('')}
 </div>`
 ```
+
+## 💰 Custos Dedicados
+
+```{ojs}
+totalGastoProto = compras_tratadas.filter(d => d.Status === "Concluído").reduce((sum, d) => sum + d.valor_proporcional, 0)
+totalPrevistoProto = compras_tratadas.filter(d => d.Status === "Aguardando verba").reduce((sum, d) => sum + d.valor_proporcional, 0)
+
+html`
+<div class="finance-grid">
+  <div class="finance-card" style="border-top: 5px solid #0d6efd;"><div class="finance-title">Gasto Proporcional (Comprado)</div><div class="finance-value" style="color: #0d6efd;">${formatarMoeda(totalGastoProto)}</div></div>
+  <div class="finance-card" style="border-top: 5px solid #fd7e14;"><div class="finance-title">Previsão Necessária (Aguardando Verba)</div><div class="finance-value" style="color: #fd7e14;">${formatarMoeda(totalPrevistoProto)}</div></div>
+</div>`
+```
+
+<div class="filtros-container">
+```{ojs}
+viewof filtro_compra_stat_local = Inputs.select(["Todos", "Aguardando verba", "Aguardando reembolso", "Doação", "Concluído"], {label: "Filtrar Status:", value: "Todos"})
+```
+</div>
+
+```{ojs}
+itens_compras_filtrados = compras_tratadas
+  .filter(d => filtro_compra_stat_local === "Todos" || d.Status === filtro_compra_stat_local)
+  .sort((a, b) => {
+    let peso = { "URGENTE!": 1, "Tem que comprar logo": 2, "Da pra esperar": 3, "Apenas um detalhe": 4 };
+    return (peso[a.Prioridade] || 5) - (peso[b.Prioridade] || 5);
+  })
+
+html`<div>
+  ${itens_compras_filtrados.map(d => {
+    let corStatus = d.Status === 'Concluído' ? '#0d6efd' : d.Status === 'Doação' ? '#39ff14' : d.Status === 'Aguardando reembolso' ? '#ffc107' : '#fd7e14';
+    let txtStatus = (d.Status === 'Aguardando reembolso' || d.Status === 'Doação') ? '#000' : '#fff';
+    
+    let corPrioridade = d.Prioridade === 'URGENTE!' ? '#dc3545' : d.Prioridade === 'Tem que comprar logo' ? '#fd7e14' : d.Prioridade === 'Da pra esperar' ? '#ffc107' : '#198754';
+    let txtPrioridade = d.Prioridade === 'Da pra esperar' ? '#000' : '#fff';
+
+    let anexoHtml = "";
+    if (d.Anexo && d.Anexo.trim() !== "") {
+      let anexo = d.Anexo.trim(), isLink = anexo.startsWith("http"), isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
+      if (isImage) anexoHtml = `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Imagem:</strong><br><img src="${anexo}" style="max-width: 100%; max-height: 180px; border-radius: 6px; margin-top: 8px; border: 1px solid #333;"></div>`;
+      else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">🔗 Link:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Ver Loja ↗</a></p>`;
+      else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Local:</strong> ${anexo}</p>`;
+    }
+    return `
+      <details class="item-card" style="border-left: 5px solid ${corStatus};">
+        <summary style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;"><span style="background: ${corPrioridade}; color: ${txtPrioridade}; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 2px;">🔥 ${d.Prioridade ? d.Prioridade.toUpperCase() : '---'}</span><span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700;">${d.Setor || ""}</span></div>
+            <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Item}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            <span style="background: ${corStatus}; color: ${txtStatus}; padding: 3px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">${d.Status}</span>
+            <span style="color: #fff; font-size: 1.1em; font-weight: 700;">${formatarMoeda(d.valor_num)}</span>
+          </div>
+        </summary>
+        <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
+          <hr style="border-color: #333; margin-top: 0;"><p><strong>Especificação / Pra que:</strong> ${d['Pra que'] || "---"}</p>${anexoHtml}
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Quem pediu:</strong> ${d['Quem Pediu'] || "---"}</span><span><strong>Qtd:</strong> ${d.Quantidade || "1"}</span></div>
+        </div>
+      </details>`;
+  }).join('')}
+</div>`
+```
+
+:::
