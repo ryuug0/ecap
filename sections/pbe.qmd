@@ -16,7 +16,8 @@ compras_proto_base = dados_brutos_compras.filter(d => d.Categoria && d.Categoria
 // Processamentos Locais
 demandas_expandidas = demandas_proto.flatMap(d => {
   if (!d.Setor) return [];
-  return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim() }));
+  let grupo = d.Status === "Concluído" ? "Concluído" : "A Fazer";
+  return d.Setor.split(",").map(s => ({ ...d, Setor: s.trim(), GrupoStatus: grupo }));
 })
 
 function parseMoeda(str) {
@@ -33,9 +34,10 @@ function parseMoeda(str) {
 }
 
 compras_tratadas = compras_proto_base.map(d => {
-  let valorLimpo = d.Valor ? parseMoeda(d.Valor) : (parseMoeda(d.Preço) * (parseInt(d.Quantidade) || 1));
+  let valorLimpo = parseMoeda(d.Valor || d.Preço);
   let numCat = d.Categoria ? d.Categoria.split(",").map(c=>c.trim()).length : 1;
-  return { ...d, valor_num: valorLimpo, valor_proporcional: valorLimpo / numCat };
+  let grupo = (d.Status === "Concluído" || d.Status === "Doação") ? "Liquidado" : "A Pagar";
+  return { ...d, valor_num: valorLimpo, valor_proporcional: valorLimpo / numCat, GrupoFinancas: grupo };
 })
 
 // Funções de Suporte (Datas e Moeda)
@@ -96,13 +98,23 @@ html`<style>
 html`
 <div class="dashboard-grid">
   <div class="chart-card">
-    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Demandas do Protótipo por Setor</h4>
+    <h4 style="margin-top:0; color:#aaa; font-size:14px;">Comparativo Lado a Lado por Setor</h4>
     ${Plot.plot({
       style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
-      marginBottom: 110, x: { label: null, tickRotate: -45 },
+      marginBottom: 110, 
+      fx: { axis: "bottom", label: null, tickRotate: -45 },
+      x: { axis: null, paddingInner: 0.1 },
       y: { label: null, grid: true, tickFormat: d => Number.isInteger(d) ? d : "" },
-      color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"] },
-      marks: [Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { x: "Setor", fill: "Status", tip: true, rx: 4 }))]
+      color: { domain: ["Pendente", "Faltando só o detalhe", "Concluído"], range: ["#dc3545", "#ffc107", "#198754"], legend: true },
+      marks: [
+        Plot.barY(demandas_expandidas, Plot.groupX({ y: "count" }, { 
+          fx: "Setor", 
+          x: "GrupoStatus", 
+          fill: "Status", 
+          tip: true, 
+          rx: 4 
+        }))
+      ]
     })}
   </div>
   <div class="score-grid">
@@ -181,13 +193,34 @@ html`<div>
 ## 💰 Custos Dedicados
 
 ```{ojs}
-totalGastoProto = compras_tratadas.filter(d => d.Status === "Concluído").reduce((sum, d) => sum + d.valor_proporcional, 0)
-totalPrevistoProto = compras_tratadas.filter(d => d.Status === "Aguardando verba").reduce((sum, d) => sum + d.valor_proporcional, 0)
+totalGastoProto = compras_tratadas.filter(d => d.Status === "Concluído" || d.Status === "Doação").reduce((sum, d) => sum + d.valor_proporcional, 0)
+totalPrevistoProto = compras_tratadas.filter(d => d.Status === "Aguardando verba" || d.Status === "Aguardando reembolso").reduce((sum, d) => sum + d.valor_proporcional, 0)
 
 html`
 <div class="finance-grid">
-  <div class="finance-card" style="border-top: 5px solid #0d6efd;"><div class="finance-title">Gasto Proporcional (Comprado)</div><div class="finance-value" style="color: #0d6efd;">${formatarMoeda(totalGastoProto)}</div></div>
-  <div class="finance-card" style="border-top: 5px solid #fd7e14;"><div class="finance-title">Previsão Necessária (Aguardando Verba)</div><div class="finance-value" style="color: #fd7e14;">${formatarMoeda(totalPrevistoProto)}</div></div>
+  <div class="finance-card" style="border-top: 5px solid #0d6efd;"><div class="finance-title">Gastos Liquidados (Comprado)</div><div class="finance-value" style="color: #0d6efd;">${formatarMoeda(totalGastoProto)}</div></div>
+  <div class="finance-card" style="border-top: 5px solid #fd7e14;"><div class="finance-title">A Pagar (Verba / Reembolso)</div><div class="finance-value" style="color: #fd7e14;">${formatarMoeda(totalPrevistoProto)}</div></div>
+</div>
+<div class="chart-card" style="margin-bottom:20px;">
+  <h4 style="margin-top:0; color:#aaa; font-size:14px; margin-bottom:15px;">Comparativo Lado a Lado por Setor</h4>
+  ${Plot.plot({
+    style: { background: "transparent", color: "#e0e0e0", fontSize: "14px" },
+    marginLeft: 60, marginBottom: 110, height: 300, 
+    fx: { axis: "bottom", label: null, tickRotate: -45 }, 
+    x: { axis: null, paddingInner: 0.1 }, 
+    y: { label: null, grid: true },
+    color: { domain: ["Aguardando verba", "Aguardando reembolso", "Doação", "Concluído"], range: ["#fd7e14", "#ffc107", "#39ff14", "#0d6efd"], legend: true },
+    marks: [
+      Plot.barY(compras_tratadas, Plot.groupX({ y: "sum" }, { 
+        fx: "Setor", 
+        x: "GrupoFinancas", 
+        fill: "Status", 
+        y: "valor_proporcional",
+        tip: true, 
+        rx: 4 
+      }))
+    ]
+  })}
 </div>`
 ```
 
@@ -201,6 +234,10 @@ viewof filtro_compra_stat_local = Inputs.select(["Todos", "Aguardando verba", "A
 itens_compras_filtrados = compras_tratadas
   .filter(d => filtro_compra_stat_local === "Todos" || d.Status === filtro_compra_stat_local)
   .sort((a, b) => {
+    let isFinalizadoA = (a.Status === 'Concluído' || a.Status === 'Doação') ? 1 : 0;
+    let isFinalizadoB = (b.Status === 'Concluído' || b.Status === 'Doação') ? 1 : 0;
+    if (isFinalizadoA !== isFinalizadoB) return isFinalizadoA - isFinalizadoB;
+    
     let peso = { "URGENTE!": 1, "Tem que comprar logo": 2, "Da pra esperar": 3, "Apenas um detalhe": 4 };
     return (peso[a.Prioridade] || 5) - (peso[b.Prioridade] || 5);
   })
@@ -210,8 +247,10 @@ html`<div>
     let corStatus = d.Status === 'Concluído' ? '#0d6efd' : d.Status === 'Doação' ? '#39ff14' : d.Status === 'Aguardando reembolso' ? '#ffc107' : '#fd7e14';
     let txtStatus = (d.Status === 'Aguardando reembolso' || d.Status === 'Doação') ? '#000' : '#fff';
     
+    let isFinalizado = d.Status === 'Concluído' || d.Status === 'Doação';
     let corPrioridade = d.Prioridade === 'URGENTE!' ? '#dc3545' : d.Prioridade === 'Tem que comprar logo' ? '#fd7e14' : d.Prioridade === 'Da pra esperar' ? '#ffc107' : '#198754';
     let txtPrioridade = d.Prioridade === 'Da pra esperar' ? '#000' : '#fff';
+    let badgePrioridade = isFinalizado ? '' : `<span style="background: ${corPrioridade}; color: ${txtPrioridade}; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 2px;">🔥 ${d.Prioridade ? d.Prioridade.toUpperCase() : '---'}</span>`;
 
     let anexoHtml = "";
     if (d.Anexo && d.Anexo.trim() !== "") {
@@ -220,11 +259,14 @@ html`<div>
       else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">🔗 Link:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Ver Loja ↗</a></p>`;
       else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Local:</strong> ${anexo}</p>`;
     }
+    
+    let quemPediuLabel = d.Status === 'Aguardando reembolso' ? 'Reembolsar a:' : 'Quem pediu:';
+
     return `
       <details class="item-card" style="border-left: 5px solid ${corStatus};">
         <summary style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;"><span style="background: ${corPrioridade}; color: ${txtPrioridade}; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 2px;">🔥 ${d.Prioridade ? d.Prioridade.toUpperCase() : '---'}</span><span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700;">${d.Setor || ""}</span></div>
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">${badgePrioridade}<span style="color: #adb5bd; font-size: 0.75em; text-transform: uppercase; font-weight: 700;">${d.Setor || ""}</span></div>
             <span style="color: #fff; font-size: 1.1em; font-weight: 500;">${d.Item}</span>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
@@ -234,7 +276,7 @@ html`<div>
         </summary>
         <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
           <hr style="border-color: #333; margin-top: 0;"><p><strong>Finalidade:</strong> ${d['Pra que'] || "---"}</p>${anexoHtml}
-          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Quem pediu:</strong> ${d['Quem Pediu'] || "---"}</span><span><strong>Qtd:</strong> ${d.Quantidade || "1"}</span></div>
+          <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>${quemPediuLabel}</strong> ${d['Quem Pediu'] || "---"}</span><span><strong>Qtd:</strong> ${d.Quantidade || "1"}</span></div>
         </div>
       </details>`;
   }).join('')}
