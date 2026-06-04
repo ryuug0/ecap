@@ -224,7 +224,7 @@ html`<div>
           </div>
         </summary>
         <div style="padding: 0 16px 16px 16px; color: #ced4da; font-size: 0.9em; line-height: 1.6;">
-          <hr style="border-color: #333; margin-top: 0;"><p><strong>Especificação / Pra que:</strong> ${d['Pra que'] || "---"}</p>${anexoHtml}
+          <hr style="border-color: #333; margin-top: 0;"><p><strong> Finalidade: </strong> ${d['Pra que'] || "---"}</p>${anexoHtml}
           <div style="display: flex; gap: 24px; margin-top: 12px; color: #868e96;"><span><strong>Quem pediu:</strong> ${d['Quem Pediu'] || "---"}</span><span><strong>Qtd:</strong> ${d.Quantidade || "1"}</span></div>
         </div>
       </details>`;

@@ -8,8 +8,6 @@ website:
     logo: logo.jpeg
     background: "black"
     left:
-      - href: index.qmd
-        text: Home
       - href: sections/pbe.qmd
         text: Protótipo
       - href: sections/ucbe.qmd
