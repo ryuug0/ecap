@@ -4,6 +4,7 @@ project:
 
 website:
   title: ""
+  favicon: logo2.png
   navbar:
     logo: logo.jpeg
     background: "black"
