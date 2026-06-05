@@ -252,12 +252,25 @@ html`<div>
     let txtPrioridade = d.Prioridade === 'Da pra esperar' ? '#000' : '#fff';
     let badgePrioridade = isFinalizado ? '' : `<span style="background: ${corPrioridade}; color: ${txtPrioridade}; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; margin-right: 2px;">🔥 ${d.Prioridade ? d.Prioridade.toUpperCase() : '---'}</span>`;
 
-    let anexoHtml = "";
+ let anexoHtml = "";
     if (d.Anexo && d.Anexo.trim() !== "") {
-      let anexo = d.Anexo.trim(), isLink = anexo.startsWith("http"), isImage = isLink && (anexo.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null);
-      if (isImage) anexoHtml = `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Imagem:</strong><br><img src="${anexo}" style="max-width: 100%; max-height: 180px; border-radius: 6px; margin-top: 8px; border: 1px solid #333;"></div>`;
-      else if (isLink) anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">🔗 Link:</strong> <a href="${anexo}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Ver Loja ↗</a></p>`;
-      else anexoHtml = `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Local:</strong> ${anexo}</p>`;
+      // Separa o conteúdo da célula por espaços, vírgulas ou quebras de linha
+      let anexosArray = d.Anexo.trim().split(/[\s,|\n]+/); 
+      
+      anexosArray.forEach(item => {
+        if (!item) return;
+        let isLink = item.startsWith("http");
+        // Retirei o $ do final da regra da imagem para aceitar links com parâmetros adicionais no URL
+        let isImage = isLink && (item.match(/\.(jpeg|jpg|gif|png|webp)/i) != null);
+
+        if (isImage) {
+          anexoHtml += `<div style="margin-top: 12px;"><strong style="color:#aaa;">📎 Imagem:</strong><br><img src="${item}" style="max-width: 100%; max-height: 180px; border-radius: 6px; margin-top: 8px; border: 1px solid #333;"></div>`;
+        } else if (isLink) {
+          anexoHtml += `<p style="margin-top: 8px;"><strong style="color:#aaa;">🔗 Link:</strong> <a href="${item}" target="_blank" style="color: #0dcaf0; text-decoration: none; font-weight: bold;">Acessar Link ↗</a></p>`;
+        } else {
+          anexoHtml += `<p style="margin-top: 8px;"><strong style="color:#aaa;">📎 Info:</strong> ${item}</p>`;
+        }
+      });
     }
     
     let quemPediuLabel = d.Status === 'Aguardando reembolso' ? 'Reembolsar a:' : d.Status === 'Doação' ? 'Quem DOOU:' : 'Quem pediu:';
