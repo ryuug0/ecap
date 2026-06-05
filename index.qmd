@@ -263,7 +263,7 @@ html`
 <div class="filtros-container">
 ```{ojs}
 viewof filtro_compra_proj = Inputs.select(["Todos", "Protótipo", "Conceito Urbano", "Geral"], {label: "Filtrar Projeto:", value: "Todos"})
-viewof filtro_compra_stat = Inputs.select(["Todos", "Aguardando verba", "Aguardando reembolso", "Doação", "Concluído", "Valor a definir" ], {label: "Filtrar Status:", value: "Todos"})
+viewof filtro_compra_stat = Inputs.select(["Todos", "Aguardando verba", "Aguardando reembolso", "Doação", "Valor a definir", "Concluído"], {label: "Filtrar Status:", value: "Todos"})
 ```
 </div>
 
