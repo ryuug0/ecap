@@ -255,7 +255,7 @@ html`<div>
    let anexoHtml = "";
     if (d.Anexo && d.Anexo.trim() !== "") {
       // Separa o conteúdo da célula por espaços, vírgulas ou quebras de linha
-      let anexosArray = d.Anexo.trim().split(/[\s,|\n]+/); 
+      let anexosArray = d.Anexo.trim().split(/\n+/);
       
       anexosArray.forEach(item => {
         if (!item) return;
