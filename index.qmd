@@ -281,7 +281,7 @@ itens_filtrados = compras_tratadas
 
 html`<div>
   ${itens_filtrados.map(d => {
-    let corStatus = d.Status === 'Concluído' ? '#0d6efd' : d.Status === 'Doação' ? '#39ff14' : d.Status === 'Aguardando reembolso' ? '#ffc107' : '#fd7e14';
+    let corStatus = d.Status === 'Concluído' ? '#0d6efd' : d.Status === 'Doação' ? '#39ff14' : d.Status === 'Aguardando reembolso' ? '#ffc107' : d.Status === 'Valor a definir' ? '#b10202' : '#fd7e14';
     let txtStatus = (d.Status === 'Aguardando reembolso' || d.Status === 'Doação') ? '#000' : '#fff';
     
     let isFinalizado = d.Status === 'Concluído' || d.Status === 'Doação';
